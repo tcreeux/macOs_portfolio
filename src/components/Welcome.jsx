@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useMemo } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 
@@ -7,7 +7,13 @@ const FONT_WEIGHTS = {
   title: { min: 400, max: 900, default: 400 },
 };
 
-const rendertext = (text, className, baseWeight = 400) => {
+const ANIMATION_CONFIG = {
+  HOVER_DURATION: 0.1,
+  MOUSE_LEAVE_DURATION: 0.3,
+  INTENSITY_DIVISOR: 5000,
+};
+
+const renderText = (text, className, baseWeight = 400) => {
   return [...text].map((char, i) => (
     <span
       key={i}
@@ -20,12 +26,25 @@ const rendertext = (text, className, baseWeight = 400) => {
 };
 
 const setupTextHover = (container, type) => {
-  if (!container) return;
+  if (!container) return () => {};
+
+  if (!FONT_WEIGHTS[type]) {
+    console.warn(
+      `Invalid type "${type}" for FONT_WEIGHTS. Available types: ${Object.keys(
+        FONT_WEIGHTS
+      ).join(", ")}`
+    );
+    return () => {};
+  }
 
   const letters = container.querySelectorAll("span");
 
   const { min, max, default: base } = FONT_WEIGHTS[type];
-  const animateLetter = (letter, weight, duration = 0.1) => {
+  const animateLetter = (
+    letter,
+    weight,
+    duration = ANIMATION_CONFIG.HOVER_DURATION
+  ) => {
     return gsap.to(letter, {
       fontVariationSettings: `'wght' ${weight}`,
       duration: duration,
@@ -33,23 +52,36 @@ const setupTextHover = (container, type) => {
     });
   };
 
+  let rafId = null;
+  let lastMouseX = null;
+
   const handleMouseMove = (e) => {
-    const containerRect = container.getBoundingClientRect();
-    const x = e.clientX - containerRect.left;
+    lastMouseX = e.clientX;
 
-    letters.forEach((letter) => {
-      const letterRect = letter.getBoundingClientRect();
-      const letterCenter =
-        letterRect.left - containerRect.left + letterRect.width / 2;
-      const distance = Math.abs(x - letterCenter);
-      const intensity = Math.exp(-(distance ** 2) / 5000);
+    if (rafId === null) {
+      rafId = requestAnimationFrame(() => {
+        const containerRect = container.getBoundingClientRect();
+        const x = lastMouseX - containerRect.left;
 
-      animateLetter(letter, min + (max - min) * intensity);
-    });
+        letters.forEach((letter) => {
+          const letterRect = letter.getBoundingClientRect();
+          const letterCenter =
+            letterRect.left - containerRect.left + letterRect.width / 2;
+          const distance = Math.abs(x - letterCenter);
+          const intensity = Math.exp(
+            -(distance ** 2) / ANIMATION_CONFIG.INTENSITY_DIVISOR
+          );
+
+          animateLetter(letter, min + (max - min) * intensity);
+        });
+
+        rafId = null;
+      });
+    }
   };
   const handleMouseLeave = () => {
     letters.forEach((letter) => {
-      animateLetter(letter, base, 0.3);
+      animateLetter(letter, base, ANIMATION_CONFIG.MOUSE_LEAVE_DURATION);
     });
   };
 
@@ -57,6 +89,10 @@ const setupTextHover = (container, type) => {
   container.addEventListener("mouseleave", handleMouseLeave);
 
   return () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
     container.removeEventListener("mousemove", handleMouseMove);
     container.removeEventListener("mouseleave", handleMouseLeave);
   };
@@ -66,27 +102,32 @@ const Welcome = () => {
   const titleRef = useRef(null);
   const subtitleRef = useRef(null);
 
+  const subtitleText = useMemo(
+    () =>
+      renderText("Hello, I'm Tom. Welcome to my", "text-3xl font-georama", 100),
+    []
+  );
+
+  const titleText = useMemo(
+    () => renderText("Portfolio", "text-9xl italic font-georama"),
+    []
+  );
+
   useGSAP(() => {
     const titleCleanup = setupTextHover(titleRef.current, "title");
     const subtitleCleanup = setupTextHover(subtitleRef.current, "subtitle");
 
     return () => {
-      if (titleCleanup) titleCleanup();
-      if (subtitleCleanup) subtitleCleanup();
+      titleCleanup();
+      subtitleCleanup();
     };
   }, []);
 
   return (
     <section id="welcome">
-      <p ref={subtitleRef}>
-        {rendertext(
-          "Hello, I'm Tom. Welcome to my",
-          "text-3xl font-georama",
-          "100"
-        )}
-      </p>
+      <p ref={subtitleRef}>{subtitleText}</p>
       <h1 ref={titleRef} className="mt-7">
-        {rendertext("Portfolio", "text-9xl italic font-georama")}
+        {titleText}
       </h1>
 
       <div className="small-screen">
