@@ -109,7 +109,7 @@ const Welcome = () => {
   );
 
   const titleText = useMemo(
-    () => renderText("Portfolio", "text-9xl italic font-georama"),
+    () => renderText("portfolio", "text-9xl italic font-georama"),
     []
   );
 
